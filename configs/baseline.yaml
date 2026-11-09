@@ -1,0 +1,19 @@
+paths:
+  train: data/train.csv
+  test: data/test.csv
+  folds: data/folds.csv
+  reports: reports
+  figures: reports/figures
+cv:
+  n_splits: 5
+  n_bins: 10
+  seeds: [42, 1337, 2026]
+models:
+  dummy_mean: {}
+  readability_linreg: {}
+  tfidf_ridge:
+    ngram_range: [1, 2]
+    min_df: 2
+    max_features: 50000
+    sublinear_tf: true
+    alpha: 1.0
