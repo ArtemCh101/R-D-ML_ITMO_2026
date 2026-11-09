@@ -1,3 +1,5 @@
+import argparse
+
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold
@@ -38,4 +40,7 @@ def load_folds(cfg):
 
 
 if __name__ == "__main__":
-    print(build_folds(load_config()).head())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="configs/baseline.yaml")
+    args = parser.parse_args()
+    print(build_folds(load_config(args.config)).head())

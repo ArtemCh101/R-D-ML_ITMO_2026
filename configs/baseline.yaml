@@ -1,19 +1,29 @@
+experiment: tfidf_ridge
 paths:
   train: data/train.csv
   test: data/test.csv
   folds: data/folds.csv
   reports: reports
   figures: reports/figures
+  models: models
 cv:
   n_splits: 5
   n_bins: 10
   seeds: [42, 1337, 2026]
-models:
-  dummy_mean: {}
-  readability_linreg: {}
-  tfidf_ridge:
+model:
+  name: tfidf_ridge
+  params:
     ngram_range: [1, 2]
     min_df: 2
     max_features: 50000
     sublinear_tf: true
+    lowercase: true
     alpha: 1.0
+eval:
+  bootstrap_iters: 2000
+  ci: 0.95
+  seed: 42
+  target_bins: 5
+  se_bins: 4
+  n_error_examples: 3
+  n_top_terms: 20
