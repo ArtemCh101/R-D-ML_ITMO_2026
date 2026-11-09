@@ -12,11 +12,11 @@
 3. [Данные (EDA)](#3-данные-eda)
 4. [Baseline](#4-baseline)
 5. [Протокол оценки](#5-протокол-оценки)
-6. [Результаты baseline](#6-результаты-бейзлайна)
+6. [Результаты baseline](#6-результаты-baseline)
 7. [Выводы](#7-выводы)
-9. [Исследовательские вопросы](#8-исследовательские-вопросы)
-10. [Запуск](#9-запуск)
-11. [Структура репозитория](#10-структура-репозитория)
+8. [Исследовательские вопросы](#8-исследовательские-вопросы)
+9. [Запуск](#9-запуск)
+10. [Структура репозитория](#10-структура-репозитория)
 
 ---
 
@@ -217,12 +217,21 @@ $$\mathrm{RMSE} = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}$$
 
 **Графики** (`reports/tfidf_ridge/figures/`):
 
-| | |
-|---|---|
-| ![pred vs true](reports/tfidf_ridge/figures/pred_vs_true.png) | ![residuals](reports/tfidf_ridge/figures/residuals_vs_target.png) |
-| Предсказания сжаты относительно диагонали | Средний остаток линейно падает с таргетом |
-| ![rmse by slice](reports/tfidf_ridge/figures/rmse_by_slice.png) | ![rmse per fold](reports/tfidf_ridge/figures/rmse_per_fold.png) |
-| Ошибка максимальна на краях шкалы | RMSE стабилен по фолдам и сидам |
+![pred vs true](reports/tfidf_ridge/figures/pred_vs_true.png)
+
+*Предсказания сжаты относительно диагонали.*
+
+![residuals](reports/tfidf_ridge/figures/residuals_vs_target.png)
+
+*Средний остаток линейно падает с таргетом.*
+
+![rmse by slice](reports/tfidf_ridge/figures/rmse_by_slice.png)
+
+*Ошибка максимальна на краях шкалы.*
+
+![rmse per fold](reports/tfidf_ridge/figures/rmse_per_fold.png)
+
+*RMSE стабилен по фолдам и сидам.*
 
 **Типичные ошибки** (полный список: [`reports/tfidf_ridge/error_examples.csv`](reports/tfidf_ridge/error_examples.csv)):
 
@@ -329,7 +338,7 @@ python -m src.train --config configs/baseline.yaml
 python -m src.evaluate --config configs/baseline.yaml
 ```
 
-Результаты появятся в `reports/tfidf_ridge/`:
+Результаты появятся в `reports/tfidf_ridge/`
 
 Модель на всем train сохраняется в `models/tfidf_ridge.joblib`.
 
