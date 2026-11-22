@@ -1,0 +1,17 @@
+{
+  "hw1_reproduction": {
+    "max_abs_pred": 0.00014517002845637617,
+    "max_abs_rmse": 5.751002967180341e-07,
+    "ok": true
+  },
+  "folds_hash_consistent": true,
+  "folds_hash_problems": [],
+  "alpha_boundary_rule_triggered": [],
+  "decision_rule": "all_seeds_ci_excludes_zero",
+  "min_effect": 0.005,
+  "bootstrap": {
+    "iters": 5000,
+    "ci": 0.95,
+    "seed": 2026
+  }
+}
