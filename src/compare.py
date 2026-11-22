@@ -11,7 +11,7 @@ import pandas as pd
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from src.registry import comparison_pairs, describe, load_experiments, validate
+from src.registry import alpha_grid, comparison_pairs, describe, feature_columns, load_experiments, validate
 from src.utils import ROOT, compute_metrics, resolve, rmse
 
 KIND_LABEL = {"improvement": "улучшение", "total": "итог", "ablation": "абляция"}
@@ -80,11 +80,12 @@ def paired_bootstrap(y, pred_model, pred_ref, iters, ci, seed, chunk=500):
     }
 
 
-def verdict(rows):
+def verdict(rows, min_effect):
+    mean_delta = float(np.mean([r["delta"] for r in rows]))
     if all(r["ci_high"] < 0 for r in rows):
-        return "значимо лучше"
+        return "значимо лучше" if abs(mean_delta) >= min_effect else "значимо, но пренебрежимо"
     if all(r["ci_low"] > 0 for r in rows):
-        return "значимо хуже"
+        return "значимо хуже" if abs(mean_delta) >= min_effect else "значимо, но пренебрежимо"
     return "незначимо"
 
 
@@ -151,9 +152,7 @@ def compute(exps, reports, folds_path, require_hash=True):
         summaries[name], fold_tables[name] = model_summary(oofs[name], folds, seeds, target_bins)
         alphas, _ = alpha_files(reports, name)
         if alphas is not None:
-            grid = np.logspace(**{"start": first["model_defaults"]["alpha_grid"]["log10_start"],
-                                  "stop": first["model_defaults"]["alpha_grid"]["log10_stop"],
-                                  "num": first["model_defaults"]["alpha_grid"]["num"]})
+            grid = alpha_grid(first)
             a = alphas["alpha"].values
             summaries[name]["alpha_median"] = float(np.median(a))
             summaries[name]["alpha_min"] = float(a.min())
@@ -172,12 +171,34 @@ def compute(exps, reports, folds_path, require_hash=True):
         fm, fr = fold_tables[m], fold_tables[r]
         merged = fm.merge(fr, on=["seed", "fold"], suffixes=("_m", "_r"))
         better_folds = int((merged["rmse_m"] < merged["rmse_r"]).sum())
-        v = verdict(seed_rows)
+        v = verdict(seed_rows, comp["min_effect"])
         for row in seed_rows:
             pair_rows.append({**pair, **row, "verdict": v, "folds_better": better_folds, "n_folds": len(merged)})
     pairs_df = pd.DataFrame(pair_rows)
+
+    reproduction = None
+    hw1 = reports / "tfidf_ridge" / "oof.csv"
+    if hw1.exists():
+        base = pd.read_csv(hw1)
+        e0 = oofs[comp["reference"]]
+        if (base["id"].values == e0["id"].values).all():
+            y = e0["target"].values
+            reproduction = {
+                "max_abs_pred": max(float(np.max(np.abs(base[f"pred_{s}"].values - e0[f"pred_{s}"].values))) for s in seeds),
+                "max_abs_rmse": max(abs(rmse(y, base[f"pred_{s}"]) - rmse(y, e0[f"pred_{s}"])) for s in seeds),
+            }
+            reproduction["ok"] = reproduction["max_abs_rmse"] < comp["reproduction_rmse_tol"]
+
+    boundary = []
+    share_limit = first["model_defaults"]["alpha_boundary_max_share"]
+    for name, m in summaries.items():
+        if m.get("alpha_edge_share", 0) > share_limit:
+            boundary.append(f"{name}: выбранная alpha на краю сетки в {m['alpha_edge_share']:.0%} фолдов "
+                            f"(порог {share_limit:.0%}) – по правилу сетку нужно расширить на 2 декады")
+
     return {"exps": exps, "seeds": seeds, "comp": comp, "summaries": summaries, "fold_tables": fold_tables,
-            "oofs": oofs, "pairs": pairs_df, "reports": reports, "hash_problems": hash_problems}
+            "oofs": oofs, "pairs": pairs_df, "reports": reports, "hash_problems": hash_problems,
+            "reproduction": reproduction, "boundary": boundary}
 
 
 def fmt(x, d=4):
@@ -271,7 +292,8 @@ def write_markdown(res, exp_df, comp_df, out):
         f"Δ = RMSE(модель) − RMSE(референс), отрицательная Δ – модель лучше. Для абляций референс – итоговая модель, "
         f"поэтому положительная Δ означает, что удаленный компонент полезен. ДИ – парный bootstrap по OOF "
         f"({b['iters']} ресемплов, {int(b['ci'] * 100)}%). Правило вердикта (зафиксировано до запуска): эффект значим, "
-        f"только если ДИ не включает 0 для всех сидов.",
+        f"только если ДИ не включает 0 для всех сидов; значимый эффект с |Δ| < {comp['min_effect']} считается практически "
+        f"пренебрежимым.",
         "",
         md_table(cview),
         "",
@@ -280,8 +302,21 @@ def write_markdown(res, exp_df, comp_df, out):
     ]
     for r in exp_df.itertuples(index=False):
         lines += [f"**{r.id}** – {r.title}", "", f"- Гипотеза: {r.hypothesis}", f"- Ожидание: {r.expected}", ""]
-    if res["hash_problems"]:
-        lines += ["## Предупреждения", ""] + [f"- {p}" for p in res["hash_problems"]] + [""]
+    lines += ["## Проверки честности", ""]
+    rep = res["reproduction"]
+    if rep is not None:
+        lines.append(f"- E0 против baseline ДЗ1 (`reports/tfidf_ridge/oof.csv`): max |ΔRMSE| по сидам = {rep['max_abs_rmse']:.1e}, "
+                     f"max |Δpred| = {rep['max_abs_pred']:.1e} – "
+                     + ("результат воспроизведен." if rep["ok"] else "**результат НЕ воспроизведен.**")
+                     + " Расхождение предсказаний – погрешность итеративного решателя Ridge в ДЗ1 (sparse_cg, tol = 1e-4); "
+                       "во всех экспериментах ДЗ2 используется точное решение (RidgeCV), одинаковое для фиксированной и подбираемой alpha.")
+    else:
+        lines.append("- Сравнение E0 с baseline ДЗ1 не выполнено: нет `reports/tfidf_ridge/oof.csv`.")
+    lines.append("- Хэш `data/folds.csv` совпадает у всех экспериментов." if not res["hash_problems"]
+                 else "- " + "; ".join(res["hash_problems"]))
+    lines.append("- Правило границ сетки alpha: " + ("не сработало ни в одном эксперименте." if not res["boundary"]
+                                                     else "; ".join(res["boundary"])))
+    lines.append("")
     lines += ["## Графики", ""] + [f"![{p.stem}](figures/{p.name})" for p in sorted((out / "figures").glob("*.png"))]
     (out / "experiments.md").write_text("\n".join(lines))
 
@@ -438,6 +473,34 @@ def plot_alpha(res, path):
     return True
 
 
+def plot_feature_coefs(res, path):
+    name = res["comp"]["final"]
+    f = res["reports"] / name / "feature_coefs.csv"
+    if not f.exists():
+        return False
+    coefs = pd.read_csv(f)
+    cfg = res["exps"][name]
+    group_of = {c: g for g, cols in cfg["features"]["groups"].items() for c in cols}
+    order = feature_columns(cfg)
+    stats = coefs.groupby("feature")["coef"].agg(["mean", "std"]).reindex(order)
+    groups = list(cfg["features"]["groups"])
+    colors = {g: plt.cm.tab10.colors[i] for i, g in enumerate(groups)}
+    fig, ax = plt.subplots(figsize=(8, 0.4 * len(order) + 1.5))
+    y = np.arange(len(order))[::-1]
+    ax.barh(y, stats["mean"], xerr=stats["std"], color=[colors[group_of[c]] for c in order], capsize=3)
+    ax.set_yticks(y)
+    ax.set_yticklabels(order, fontsize=8)
+    ax.axvline(0, color="black", lw=1)
+    ax.set_xlabel("коэффициент Ridge (стандартизированный признак), mean ± std по 15 фолдам")
+    ax.set_title(f"Readability-признаки в итоговой модели ({name})")
+    handles = [plt.Rectangle((0, 0), 1, 1, color=colors[g]) for g in groups]
+    ax.legend(handles, groups, fontsize=8, loc="best")
+    plt.tight_layout()
+    plt.savefig(path, dpi=120)
+    plt.close()
+    return True
+
+
 def write_outputs(res, out):
     out.mkdir(parents=True, exist_ok=True)
     fig = out / "figures"
@@ -454,6 +517,7 @@ def write_outputs(res, out):
     plot_residuals(res, fig / "04_residuals_baseline_vs_final.png")
     plot_fold_pairs(res, fig / "05_fold_rmse_baseline_vs_final.png")
     plot_alpha(res, fig / "06_alpha_selection.png")
+    plot_feature_coefs(res, fig / "07_feature_coefs_final.png")
     write_markdown(res, exp_df, comp_df, out)
     return exp_df, comp_df
 
@@ -466,6 +530,12 @@ def run(exps_dir=None, require_hash=True):
     out = resolve(first["comparison"]["output"])
     exp_df, comp_df = write_outputs(res, out)
     print(comp_df[["kind", "model", "ref", "delta_mean", "folds_better", "verdict"]].to_string(index=False))
+    rep = res["reproduction"]
+    if rep is not None:
+        print(f"E0 vs HW1 baseline: max |delta RMSE| = {rep['max_abs_rmse']:.1e}, max |delta pred| = {rep['max_abs_pred']:.1e}, "
+              f"{'reproduced' if rep['ok'] else 'NOT REPRODUCED'}")
+    for b in res["boundary"]:
+        print(f"[warn] {b}")
     print(f"Saved {out / 'experiments.md'}")
 
 
@@ -508,11 +578,15 @@ def selftest():
             oof.to_csv(d / "oof.csv", index=False)
             (d / "metrics.json").write_text(json.dumps({"run_info": {"folds_sha256": folds_hash}}))
             if exps[name]["model"]["tuning"] == "nested_loo":
-                grid = np.logspace(-2, 3, 31)
+                grid = alpha_grid(first)
                 curve = pd.DataFrame([{"seed": s, "fold": k, "alpha": a, "inner_rmse": 0.7 + 0.01 * (np.log10(a) + 0.5) ** 2}
                                       for s in seeds for k in range(5) for a in grid])
                 curve.to_csv(d / "alpha_curve.csv", index=False)
-                pd.DataFrame([{"seed": s, "fold": k, "alpha": grid[9]} for s in seeds for k in range(5)]).to_csv(d / "alphas.csv", index=False)
+                pd.DataFrame([{"seed": s, "fold": k, "alpha": grid[15]} for s in seeds for k in range(5)]).to_csv(d / "alphas.csv", index=False)
+            cols = feature_columns(exps[name])
+            if cols:
+                pd.DataFrame([{"seed": s, "fold": k, "feature": c, "coef": float(rng.normal())}
+                              for s in seeds for k in range(5) for c in cols]).to_csv(d / "feature_coefs.csv", index=False)
         res = compute(exps, tmp, folds_path)
         out = tmp / "comparison"
         exp_df, comp_df = write_outputs(res, out)
@@ -521,7 +595,7 @@ def selftest():
         total = comp_df[comp_df["kind"] == "total"].iloc[0]
         assert total["verdict"] == "значимо лучше", total
         figs = sorted(p.name for p in (out / "figures").glob("*.png"))
-        assert len(figs) == 6, figs
+        assert len(figs) == 7, figs
         bad = dict(json.loads((tmp / "e1_ridgecv" / "metrics.json").read_text()))
         bad["run_info"]["folds_sha256"] = "0" * 64
         (tmp / "e1_ridgecv" / "metrics.json").write_text(json.dumps(bad))

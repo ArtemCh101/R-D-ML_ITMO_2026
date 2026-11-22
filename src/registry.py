@@ -88,7 +88,7 @@ def validate(exps):
         if set(cols) != known:
             errors.append(f"feature groups do not match src/features.py: {sorted(set(cols) ^ known)}")
     except ImportError as e:
-        print(f"[warn] feature names not checked against src/features.py: {e}")
+        print(f"[warn] feature names not checked against src/features.py: {e}", file=sys.stderr)
 
     baselines = []
     for name, cfg in exps.items():
@@ -166,6 +166,7 @@ def describe(cfg):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", default=EXPERIMENTS_DIR)
+    parser.add_argument("--list", action="store_true")
     args = parser.parse_args()
     try:
         exps = load_experiments(args.dir)
@@ -173,6 +174,10 @@ def main():
     except RegistryError as e:
         print(f"REGISTRY INVALID:\n{e}")
         sys.exit(1)
+    if args.list:
+        for name in exps:
+            print(f"{args.dir}/{name}.yaml")
+        return
     grid = alpha_grid(next(iter(exps.values())))
     print(f"Registry OK: {len(exps)} experiments, alpha grid {grid[0]:g}..{grid[-1]:g} ({len(grid)} points)")
     for name, cfg in exps.items():

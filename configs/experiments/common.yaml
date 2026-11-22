@@ -33,6 +33,8 @@ comparison:
     ci: 0.95
     seed: 2026
   decision_rule: all_seeds_ci_excludes_zero
+  min_effect: 0.005
+  reproduction_rmse_tol: 0.0005
 
 tracking:
   enabled: true

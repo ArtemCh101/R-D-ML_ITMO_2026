@@ -117,12 +117,19 @@ def error_examples(df, train, pred_col, n):
 
 
 def top_terms(model, n):
-    names = model.named_steps["tfidf"].get_feature_names_out()
-    coef = model.named_steps["ridge"].coef_
-    order = np.argsort(coef)
-    hard = pd.DataFrame({"term": names[order[:n]], "coef": coef[order[:n]]})
-    easy = pd.DataFrame({"term": names[order[::-1][:n]], "coef": coef[order[::-1][:n]]})
-    return easy, hard
+    names = np.asarray(model[:-1].get_feature_names_out())
+    coef = np.asarray(model[-1].coef_)
+    is_term = np.array([not x.startswith("feats__") for x in names])
+    terms = np.array([x.split("__", 1)[1] if x.startswith("tfidf__") else x for x in names])
+    feats = pd.DataFrame({"feature": [x.split("__", 1)[1] for x in names[~is_term]], "coef": coef[~is_term]})
+    feats = feats.reindex(feats["coef"].abs().sort_values(ascending=False).index)
+    if not is_term.any():
+        return None, None, feats
+    t_names, t_coef = terms[is_term], coef[is_term]
+    order = np.argsort(t_coef)
+    hard = pd.DataFrame({"term": t_names[order[:n]], "coef": t_coef[order[:n]]})
+    easy = pd.DataFrame({"term": t_names[order[::-1][:n]], "coef": t_coef[order[::-1][:n]]})
+    return easy, hard, feats
 
 
 def main(config_path):
@@ -168,7 +175,7 @@ def main(config_path):
     errors.to_csv(out / "error_examples.csv", index=False)
 
     model = joblib.load(resolve(cfg["paths"]["models"]) / f"{cfg['experiment']}.joblib")
-    easy, hard = top_terms(model, ev["n_top_terms"])
+    easy, hard, feat_coefs = top_terms(model, ev["n_top_terms"])
 
     pf = metrics["per_fold"]
     summary_df = pd.DataFrame([
@@ -180,7 +187,7 @@ def main(config_path):
     lines = [
         f"# Results: {cfg['experiment']}",
         "",
-        f"Model: `{cfg['model']['name']}`, params: `{json.dumps(cfg['model']['params'])}`",
+        f"Model: `{cfg['model']['name']}`, params: `{json.dumps(cfg['model'].get('params', cfg['model']))}`",
         f"CV: {cfg['cv']['n_splits']}-fold stratified by {cfg['cv']['n_bins']} target quantiles, seeds {seeds} "
         f"({n_folds} folds total).",
         "",
@@ -221,17 +228,27 @@ def main(config_path):
             f"  > {text}...",
             "",
         ]
+    if easy is not None:
+        lines += [
+            "## Top terms of the full-data model",
+            "",
+            "### Easier (positive coefficients)",
+            "",
+            md_table(easy),
+            "",
+            "### Harder (negative coefficients)",
+            "",
+            md_table(hard),
+            "",
+        ]
+    if not feat_coefs.empty:
+        lines += [
+            "## Readability feature coefficients of the full-data model (standardized features)",
+            "",
+            md_table(feat_coefs),
+            "",
+        ]
     lines += [
-        "## Top terms of the full-data model",
-        "",
-        "### Easier (positive coefficients)",
-        "",
-        md_table(easy),
-        "",
-        "### Harder (negative coefficients)",
-        "",
-        md_table(hard),
-        "",
         "## Figures",
         "",
         "![pred vs true](figures/pred_vs_true.png)",
@@ -248,6 +265,10 @@ def main(config_path):
     with open(out / "metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
     print(f"Saved {out / 'results.md'}")
+    if "tracking" in cfg:
+        from src.tracking import log_run
+        if log_run(cfg, metrics, fold_df, out, metrics.get("run_info")):
+            print(f"Logged to MLflow: {cfg['tracking']['experiment_name']} / {cfg['experiment']}")
 
 
 if __name__ == "__main__":

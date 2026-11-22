@@ -26,7 +26,7 @@ def git_info():
             return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
             return None
-    status = run("status", "--porcelain", "--untracked-files=no")
+    status = run("status", "--porcelain", "--untracked-files=no", "--", ".", ":(exclude)reports")
     return {
         "git_commit": run("rev-parse", "HEAD"),
         "git_branch": run("rev-parse", "--abbrev-ref", "HEAD"),
