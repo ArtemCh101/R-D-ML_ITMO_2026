@@ -1,0 +1,16 @@
+base: common.yaml
+experiment: a7_no_familiarity
+title: Абляция – без Dale–Chall
+hypothesis: >
+  Dale–Chall – единственный признак с внешним знанием о частотности слов (доля слов вне
+  списка около 3000 знакомых слов). TF-IDF, обученный на 2800 текстах, такого знания не
+  имеет, и baseline ошибался именно на текстах с редкими терминами.
+ablation:
+  of: e2_ridgecv_features
+  removes: [features:familiarity]
+  expected: Наибольший вклад среди групп признаков, удаление значимо ухудшает RMSE.
+model:
+  name: linear_text
+  use_tfidf: true
+  feature_groups: [sentence, word, length, formulas]
+  tuning: nested_loo

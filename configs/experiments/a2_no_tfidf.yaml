@@ -1,0 +1,17 @@
+base: common.yaml
+experiment: a2_no_tfidf
+title: Абляция – без TF-IDF (только признаки)
+hypothesis: >
+  Проверяем вклад лексического блока: модель только на 12 readability-признаках
+  соответствует классическим формулам, которые критикуют организаторы.
+ablation:
+  of: e2_ridgecv_features
+  removes: [tfidf]
+  expected: >
+    RMSE существенно хуже E2 – около уровня классических формул (одиночный признак
+    объясняет около 30% дисперсии); лексика – основной источник сигнала.
+model:
+  name: linear_text
+  use_tfidf: false
+  feature_groups: [sentence, word, length, formulas, familiarity]
+  tuning: nested_loo

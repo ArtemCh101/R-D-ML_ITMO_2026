@@ -1,0 +1,12 @@
+base: common.yaml
+experiment: e0_baseline
+title: Baseline ДЗ1 (перезапуск новым кодом)
+hypothesis: >
+  Контроль. Перезапуск baseline (TF-IDF + Ridge, alpha = 1.0) новым кодом воспроизводит
+  результат ДЗ1: OOF-предсказания совпадают с reports/tfidf_ridge/oof.csv, RMSE 0.7248.
+expected: RMSE 0.7248 ± 0.0148, предсказания идентичны ДЗ1.
+model:
+  name: linear_text
+  use_tfidf: true
+  feature_groups: []
+  tuning: fixed

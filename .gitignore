@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 models/
+mlruns/
+mlflow.db
+.mlflow_selftest/
+reports/_compare_selftest/

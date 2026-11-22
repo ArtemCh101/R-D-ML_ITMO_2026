@@ -34,7 +34,7 @@ def bootstrap_rmse(y, p, iters, ci, seed):
 def quantile_bins(x, q):
     codes, edges = pd.qcut(x, q, labels=False, retbins=True, duplicates="drop")
     labels = [f"Q{i + 1} [{edges[i]:.2f}, {edges[i + 1]:.2f}]" for i in range(len(edges) - 1)]
-    return pd.Categorical.from_codes(codes, labels, ordered=True)
+    return pd.Categorical.from_codes(np.asarray(codes).astype(int), labels, ordered=True)
 
 
 def slice_table(df, by, pred_col):

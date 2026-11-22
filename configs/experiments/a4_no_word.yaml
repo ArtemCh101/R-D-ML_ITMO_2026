@@ -1,0 +1,17 @@
+base: common.yaml
+experiment: a4_no_word
+title: Абляция – без группы "сложность слов"
+hypothesis: >
+  Проверяем уникальный вклад поверхностной сложности слов (символы и слоги на слово,
+  доли длинных и многосложных слов) при наличии остальных групп.
+ablation:
+  of: e2_ridgecv_features
+  removes: [features:word]
+  expected: >
+    Эффект мал или незначим: syllables_per_word линейно входит в формулы Flesch и
+    Flesch–Kincaid, а длина слов частично видна в TF-IDF.
+model:
+  name: linear_text
+  use_tfidf: true
+  feature_groups: [sentence, length, formulas, familiarity]
+  tuning: nested_loo

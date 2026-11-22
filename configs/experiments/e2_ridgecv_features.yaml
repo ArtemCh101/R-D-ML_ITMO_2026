@@ -1,0 +1,19 @@
+base: common.yaml
+experiment: e2_ridgecv_features
+title: + 12 readability-признаков (итоговая модель)
+hypothesis: >
+  Мы считаем, что мешок n-грамм видит синтаксическую сложность только косвенно – через
+  служебные слова (of, which, with), а явные readability-признаки связаны с таргетом
+  (|Spearman| до 0.56 в EDA ДЗ1) и несут информацию, которой в n-граммах нет: длину
+  предложений, число слогов, долю слов вне списка знакомых слов Dale–Chall. Поэтому
+  добавляем 12 признаков (стандартизация внутри фолда) к TF-IDF при вложенном подборе alpha.
+expected: >
+  RMSE значимо ниже E1; эффект умеренный, так как часть сигнала уже покрыта n-граммами.
+improvement:
+  parent: e1_ridgecv
+  adds: [features:all]
+model:
+  name: linear_text
+  use_tfidf: true
+  feature_groups: [sentence, word, length, formulas, familiarity]
+  tuning: nested_loo

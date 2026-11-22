@@ -1,0 +1,41 @@
+base: ../baseline.yaml
+
+model_defaults:
+  tfidf:
+    ngram_range: [1, 2]
+    min_df: 2
+    max_features: 50000
+    sublinear_tf: true
+    lowercase: true
+  fixed_alpha: 1.0
+  alpha_grid:
+    log10_start: -3
+    log10_stop: 3
+    num: 37
+  alpha_boundary_max_share: 0.5
+  feature_scaling: standard
+
+features:
+  groups:
+    sentence: [n_sentences, words_per_sentence]
+    word: [chars_per_word, syllables_per_word, long_word_share, polysyllable_share]
+    length: [n_chars, n_words, type_token_ratio]
+    formulas: [flesch_reading_ease, flesch_kincaid_grade]
+    familiarity: [dale_chall]
+  cache: data/features.csv
+
+comparison:
+  reference: e0_baseline
+  final: e2_ridgecv_features
+  output: reports/comparison
+  bootstrap:
+    iters: 5000
+    ci: 0.95
+    seed: 2026
+  decision_rule: all_seeds_ci_excludes_zero
+
+tracking:
+  enabled: true
+  uri: sqlite:///mlflow.db
+  experiment_name: commonlit-readability
+  artifact_location: mlruns

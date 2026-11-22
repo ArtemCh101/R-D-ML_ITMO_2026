@@ -1,0 +1,17 @@
+base: common.yaml
+experiment: a3_no_sentence
+title: Абляция – без группы "длина предложений"
+hypothesis: >
+  Проверяем уникальный вклад признаков длины предложений (n_sentences, words_per_sentence)
+  при наличии остальных групп.
+ablation:
+  of: e2_ridgecv_features
+  removes: [features:sentence]
+  expected: >
+    Эффект мал или незначим: words_per_sentence линейно входит в формулы Flesch и
+    Flesch–Kincaid (группа formulas), поэтому информация дублируется.
+model:
+  name: linear_text
+  use_tfidf: true
+  feature_groups: [word, length, formulas, familiarity]
+  tuning: nested_loo

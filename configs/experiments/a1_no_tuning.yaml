@@ -1,0 +1,15 @@
+base: common.yaml
+experiment: a1_no_tuning
+title: Абляция – без подбора alpha (alpha = 1.0)
+hypothesis: >
+  Проверяем вклад вложенного подбора alpha в итоговой модели: после добавления плотных
+  признаков оптимальная регуляризация может отличаться от 1.0 сильнее, чем без них.
+ablation:
+  of: e2_ridgecv_features
+  removes: [tuning]
+  expected: Качество хуже E2, сжатие предсказаний к среднему возвращается.
+model:
+  name: linear_text
+  use_tfidf: true
+  feature_groups: [sentence, word, length, formulas, familiarity]
+  tuning: fixed

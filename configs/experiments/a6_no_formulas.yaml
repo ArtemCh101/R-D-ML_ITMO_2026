@@ -1,0 +1,15 @@
+base: common.yaml
+experiment: a6_no_formulas
+title: Абляция – без формул Flesch и Flesch–Kincaid
+hypothesis: >
+  Проверка избыточности: Flesch Reading Ease и Flesch–Kincaid – линейные комбинации
+  длины предложений и числа слогов на слово, которые остаются в модели.
+ablation:
+  of: e2_ridgecv_features
+  removes: [features:formulas]
+  expected: Эффект около 0 и незначим.
+model:
+  name: linear_text
+  use_tfidf: true
+  feature_groups: [sentence, word, length, familiarity]
+  tuning: nested_loo
