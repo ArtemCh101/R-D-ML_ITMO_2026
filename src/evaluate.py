@@ -265,10 +265,6 @@ def main(config_path):
     with open(out / "metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
     print(f"Saved {out / 'results.md'}")
-    if "tracking" in cfg:
-        from src.tracking import log_run
-        if log_run(cfg, metrics, fold_df, out, metrics.get("run_info")):
-            print(f"Logged to MLflow: {cfg['tracking']['experiment_name']} / {cfg['experiment']}")
 
 
 if __name__ == "__main__":

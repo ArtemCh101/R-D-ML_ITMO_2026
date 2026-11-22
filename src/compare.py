@@ -14,9 +14,6 @@ import matplotlib.pyplot as plt
 from src.registry import alpha_grid, comparison_pairs, describe, feature_columns, load_experiments, validate
 from src.utils import ROOT, compute_metrics, resolve, rmse
 
-KIND_LABEL = {"improvement": "улучшение", "total": "итог", "ablation": "абляция"}
-
-
 def load_oof(path, seeds):
     oof = pd.read_csv(path)
     missing = [f"pred_{s}" for s in seeds if f"pred_{s}" not in oof.columns]
@@ -116,11 +113,14 @@ def model_summary(oof, folds, seeds, target_bins):
     return out, fr
 
 
-def alpha_files(reports, name):
-    d = reports / name
-    alphas = pd.read_csv(d / "alphas.csv") if (d / "alphas.csv").exists() else None
-    curve = pd.read_csv(d / "alpha_curve.csv") if (d / "alpha_curve.csv").exists() else None
-    return alphas, curve
+def stored_table(metrics_entry, key):
+    rows = (metrics_entry or {}).get(key)
+    return pd.DataFrame(rows) if rows else None
+
+
+def alpha_files(res, name):
+    m = res["metrics"].get(name)
+    return stored_table(m, "alphas"), stored_table(m, "alpha_curve")
 
 
 def compute(exps, reports, folds_path, require_hash=True):
@@ -150,7 +150,7 @@ def compute(exps, reports, folds_path, require_hash=True):
     summaries, fold_tables = {}, {}
     for name in exps:
         summaries[name], fold_tables[name] = model_summary(oofs[name], folds, seeds, target_bins)
-        alphas, _ = alpha_files(reports, name)
+        alphas = stored_table(metrics[name], "alphas")
         if alphas is not None:
             grid = alpha_grid(first)
             a = alphas["alpha"].values
@@ -177,7 +177,7 @@ def compute(exps, reports, folds_path, require_hash=True):
     pairs_df = pd.DataFrame(pair_rows)
 
     reproduction = None
-    hw1 = reports / "tfidf_ridge" / "oof.csv"
+    hw1 = resolve(comp["hw1_baseline_oof"])
     if hw1.exists():
         base = pd.read_csv(hw1)
         e0 = oofs[comp["reference"]]
@@ -198,18 +198,7 @@ def compute(exps, reports, folds_path, require_hash=True):
 
     return {"exps": exps, "seeds": seeds, "comp": comp, "summaries": summaries, "fold_tables": fold_tables,
             "oofs": oofs, "pairs": pairs_df, "reports": reports, "hash_problems": hash_problems,
-            "reproduction": reproduction, "boundary": boundary}
-
-
-def fmt(x, d=4):
-    return "–" if x is None or (isinstance(x, float) and np.isnan(x)) else f"{x:.{d}f}"
-
-
-def md_table(df):
-    lines = ["| " + " | ".join(map(str, df.columns)) + " |", "|" + "|".join(["---"] * len(df.columns)) + "|"]
-    for row in df.itertuples(index=False):
-        lines.append("| " + " | ".join(map(str, row)) + " |")
-    return "\n".join(lines)
+            "reproduction": reproduction, "boundary": boundary, "metrics": metrics}
 
 
 def build_tables(res):
@@ -251,74 +240,37 @@ def build_tables(res):
     return exp_df, comp_df
 
 
-def write_markdown(res, exp_df, comp_df, out):
-    comp = res["comp"]
-    view = pd.DataFrame({
-        "ID": exp_df["id"], "Роль": exp_df["role"], "Модель": exp_df["model"], "Сиды": exp_df["seeds"],
-        "RMSE (фолды)": [f"{a:.4f} ± {b:.4f}" for a, b in zip(exp_df["fold_rmse_mean"], exp_df["fold_rmse_std"])],
-        "OOF RMSE": [f"{a:.4f} ± {b:.4f}" for a, b in zip(exp_df["oof_rmse"], exp_df["oof_rmse_seed_std"])],
-        "R²": exp_df["r2"].map(lambda x: fmt(x, 3)), "Spearman": exp_df["spearman"].map(lambda x: fmt(x, 3)),
-        "std ratio": exp_df["std_ratio"].map(lambda x: fmt(x, 3)),
-        "наклон калибр.": exp_df["calib_slope"].map(lambda x: fmt(x, 3)),
-        "RMSE Q1": exp_df["rmse_q1"].map(lambda x: fmt(x, 3)),
-        "RMSE Q5": exp_df["rmse_q_last"].map(lambda x: fmt(x, 3)),
-        "RMSE URL": exp_df["rmse_url"].map(lambda x: fmt(x, 3)),
-        "alpha (медиана)": exp_df["alpha_median"].map(lambda x: "–" if pd.isna(x) else f"{x:.3g}"),
-    })
-    cview = pd.DataFrame({
-        "Тип": comp_df["kind"].map(KIND_LABEL), "Модель": comp_df["model"], "Референс": comp_df["ref"],
-        "Δ RMSE (среднее)": comp_df["delta_mean"].map(lambda x: f"{x:+.4f}"),
-        "Δ по сидам": comp_df["delta_per_seed"], "95% ДИ по сидам": comp_df["ci_per_seed"],
-        "Фолдов лучше": comp_df["folds_better"], "Вердикт": comp_df["verdict"],
-    })
-    b = comp["bootstrap"]
-    lines = [
-        "# Таблица экспериментов",
-        "",
-        "Все эксперименты: одни и те же фолды (`data/folds.csv`, 5-fold x 3 сида), одна метрика, "
-        "одинаковый код расчета метрик (метрики пересчитаны в `src/compare.py` из OOF-предсказаний).",
-        "",
-        "## Эксперименты",
-        "",
-        md_table(view),
-        "",
-        "- `RMSE (фолды)` – mean ± std по 15 фолдам; `OOF RMSE` – RMSE по всем OOF-предсказаниям, mean ± std по сидам.",
-        "- `std ratio` = std(pred) / std(target); `наклон калибр.` – наклон регрессии target на pred "
-        "(1 – откалиброванные предсказания, > 1 – сжатие к среднему).",
-        "- `RMSE Q1` / `RMSE Q5` – самые сложные / самые легкие 20% текстов; `RMSE URL` – срез современных текстов.",
-        "",
-        "## Сравнения",
-        "",
-        f"Δ = RMSE(модель) − RMSE(референс), отрицательная Δ – модель лучше. Для абляций референс – итоговая модель, "
-        f"поэтому положительная Δ означает, что удаленный компонент полезен. ДИ – парный bootstrap по OOF "
-        f"({b['iters']} ресемплов, {int(b['ci'] * 100)}%). Правило вердикта (зафиксировано до запуска): эффект значим, "
-        f"только если ДИ не включает 0 для всех сидов; значимый эффект с |Δ| < {comp['min_effect']} считается практически "
-        f"пренебрежимым.",
-        "",
-        md_table(cview),
-        "",
-        "## Гипотезы и ожидания",
-        "",
-    ]
-    for r in exp_df.itertuples(index=False):
-        lines += [f"**{r.id}** – {r.title}", "", f"- Гипотеза: {r.hypothesis}", f"- Ожидание: {r.expected}", ""]
-    lines += ["## Проверки честности", ""]
+def build_checks(res):
     rep = res["reproduction"]
-    if rep is not None:
-        lines.append(f"- E0 против baseline ДЗ1 (`reports/tfidf_ridge/oof.csv`): max |ΔRMSE| по сидам = {rep['max_abs_rmse']:.1e}, "
-                     f"max |Δpred| = {rep['max_abs_pred']:.1e} – "
-                     + ("результат воспроизведен." if rep["ok"] else "**результат НЕ воспроизведен.**")
-                     + " Расхождение предсказаний – погрешность итеративного решателя Ridge в ДЗ1 (sparse_cg, tol = 1e-4); "
-                       "во всех экспериментах ДЗ2 используется точное решение (RidgeCV), одинаковое для фиксированной и подбираемой alpha.")
-    else:
-        lines.append("- Сравнение E0 с baseline ДЗ1 не выполнено: нет `reports/tfidf_ridge/oof.csv`.")
-    lines.append("- Хэш `data/folds.csv` совпадает у всех экспериментов." if not res["hash_problems"]
-                 else "- " + "; ".join(res["hash_problems"]))
-    lines.append("- Правило границ сетки alpha: " + ("не сработало ни в одном эксперименте." if not res["boundary"]
-                                                     else "; ".join(res["boundary"])))
-    lines.append("")
-    lines += ["## Графики", ""] + [f"![{p.stem}](figures/{p.name})" for p in sorted((out / "figures").glob("*.png"))]
-    (out / "experiments.md").write_text("\n".join(lines))
+    return {
+        "hw1_reproduction": rep,
+        "folds_hash_consistent": not res["hash_problems"],
+        "folds_hash_problems": res["hash_problems"],
+        "alpha_boundary_rule_triggered": res["boundary"],
+        "decision_rule": res["comp"]["decision_rule"],
+        "min_effect": res["comp"]["min_effect"],
+        "bootstrap": res["comp"]["bootstrap"],
+    }
+
+
+def error_examples(res, n=3):
+    comp = res["comp"]
+    first = res["exps"][comp["final"]]
+    seed = res["seeds"][0]
+    train = pd.read_csv(resolve(first["paths"]["train"]))[["id", "excerpt"]]
+    final = res["oofs"][comp["final"]]
+    base = res["oofs"][comp["reference"]]
+    d = final[["id", "target", "standard_error", "has_url"]].copy()
+    d["pred_final"] = final[f"pred_{seed}"]
+    d["pred_baseline"] = base[f"pred_{seed}"]
+    d["residual_final"] = d["pred_final"] - d["target"]
+    d = d.merge(train, on="id", how="left")
+    d["excerpt"] = d["excerpt"].str.replace("\n", " ").str.slice(0, 300)
+    over = d.nlargest(n, "residual_final").assign(kind="predicted too easy")
+    under = d.nsmallest(n, "residual_final").assign(kind="predicted too hard")
+    out = pd.concat([over, under], ignore_index=True)
+    out.insert(0, "seed", seed)
+    return out
 
 
 def plot_rmse_by_experiment(res, path):
@@ -448,13 +400,13 @@ def plot_fold_pairs(res, path):
 
 
 def plot_alpha(res, path):
-    tuned = [n for n in res["exps"] if alpha_files(res["reports"], n)[1] is not None]
+    tuned = [n for n in res["exps"] if alpha_files(res, n)[1] is not None]
     if not tuned:
         return False
     show = [n for n in main_path(res) if n in tuned] or tuned[:2]
     fig, axes = plt.subplots(1, len(show), figsize=(6 * len(show), 4), squeeze=False)
     for ax, n in zip(axes[0], show):
-        alphas, curve = alpha_files(res["reports"], n)
+        alphas, curve = alpha_files(res, n)
         for (seed, fold), g in curve.groupby(["seed", "fold"]):
             ax.plot(g["alpha"], g["inner_rmse"], color="tab:blue", alpha=0.3, lw=1)
         if alphas is not None:
@@ -475,10 +427,9 @@ def plot_alpha(res, path):
 
 def plot_feature_coefs(res, path):
     name = res["comp"]["final"]
-    f = res["reports"] / name / "feature_coefs.csv"
-    if not f.exists():
+    coefs = stored_table(res["metrics"].get(name), "feature_coefs")
+    if coefs is None:
         return False
-    coefs = pd.read_csv(f)
     cfg = res["exps"][name]
     group_of = {c: g for g, cols in cfg["features"]["groups"].items() for c in cols}
     order = feature_columns(cfg)
@@ -502,15 +453,21 @@ def plot_feature_coefs(res, path):
 
 
 def write_outputs(res, out):
-    out.mkdir(parents=True, exist_ok=True)
     fig = out / "figures"
-    fig.mkdir(exist_ok=True)
-    for old in fig.glob("*.png"):
+    tables = out / "tables"
+    fig.mkdir(parents=True, exist_ok=True)
+    tables.mkdir(parents=True, exist_ok=True)
+    for old in fig.glob("0*.png"):
         old.unlink()
+    for old in tables.iterdir():
+        if old.is_file():
+            old.unlink()
     exp_df, comp_df = build_tables(res)
-    exp_df.to_csv(out / "experiments.csv", index=False)
-    comp_df.to_csv(out / "comparisons.csv", index=False)
-    res["pairs"].to_csv(out / "paired_bootstrap.csv", index=False)
+    exp_df.to_csv(tables / "experiments.csv", index=False)
+    comp_df.to_csv(tables / "comparisons.csv", index=False)
+    res["pairs"].to_csv(tables / "paired_bootstrap.csv", index=False)
+    error_examples(res).to_csv(tables / "error_examples_final.csv", index=False)
+    (tables / "checks.json").write_text(json.dumps(build_checks(res), indent=2, ensure_ascii=False))
     plot_rmse_by_experiment(res, fig / "01_rmse_by_experiment.png")
     plot_forest(res, fig / "02_delta_forest.png")
     plot_quintiles(res, fig / "03_quintiles_main_path.png")
@@ -518,7 +475,6 @@ def write_outputs(res, out):
     plot_fold_pairs(res, fig / "05_fold_rmse_baseline_vs_final.png")
     plot_alpha(res, fig / "06_alpha_selection.png")
     plot_feature_coefs(res, fig / "07_feature_coefs_final.png")
-    write_markdown(res, exp_df, comp_df, out)
     return exp_df, comp_df
 
 
@@ -534,9 +490,12 @@ def run(exps_dir=None, require_hash=True):
     if rep is not None:
         print(f"E0 vs HW1 baseline: max |delta RMSE| = {rep['max_abs_rmse']:.1e}, max |delta pred| = {rep['max_abs_pred']:.1e}, "
               f"{'reproduced' if rep['ok'] else 'NOT REPRODUCED'}")
+    print("folds hash consistent across experiments" if not res["hash_problems"] else f"[warn] {res['hash_problems']}")
     for b in res["boundary"]:
         print(f"[warn] {b}")
-    print(f"Saved {out / 'experiments.md'}")
+    if not res["boundary"]:
+        print("alpha grid boundary rule: not triggered")
+    print(f"Saved tables to {out / 'tables'} and figures to {out / 'figures'}")
 
 
 def selftest():
@@ -547,7 +506,7 @@ def selftest():
     first = next(iter(exps.values()))
     seeds = first["cv"]["seeds"]
     folds_path = resolve(first["paths"]["folds"])
-    base_oof = load_oof(resolve(first["paths"]["reports"]) / "tfidf_ridge" / "oof.csv", seeds)
+    base_oof = load_oof(resolve(first["comparison"]["hw1_baseline_oof"]), seeds)
     y = base_oof["target"].values
 
     r = paired_bootstrap(y, base_oof["pred_42"], base_oof["pred_42"], 1000, 0.95, 0)
@@ -564,6 +523,7 @@ def selftest():
     try:
         rng = np.random.default_rng(1)
         folds_hash = file_sha256(folds_path)
+        grid = alpha_grid(first)
         for name in exps:
             d = tmp / name
             d.mkdir()
@@ -576,18 +536,18 @@ def selftest():
                     p = base_oof[f"pred_{s}"]
                     oof[f"pred_{s}"] = p + 0.2 * (y - p)
             oof.to_csv(d / "oof.csv", index=False)
-            (d / "metrics.json").write_text(json.dumps({"run_info": {"folds_sha256": folds_hash}}))
+            m = {"run_info": {"folds_sha256": folds_hash}}
             if exps[name]["model"]["tuning"] == "nested_loo":
-                grid = alpha_grid(first)
-                curve = pd.DataFrame([{"seed": s, "fold": k, "alpha": a, "inner_rmse": 0.7 + 0.01 * (np.log10(a) + 0.5) ** 2}
-                                      for s in seeds for k in range(5) for a in grid])
-                curve.to_csv(d / "alpha_curve.csv", index=False)
-                pd.DataFrame([{"seed": s, "fold": k, "alpha": grid[15]} for s in seeds for k in range(5)]).to_csv(d / "alphas.csv", index=False)
+                m["alpha_curve"] = [{"seed": s, "fold": k, "alpha": float(a), "inner_rmse": 0.7 + 0.01 * (np.log10(a) + 0.5) ** 2}
+                                    for s in seeds for k in range(5) for a in grid]
+                m["alphas"] = [{"seed": s, "fold": k, "alpha": float(grid[15])} for s in seeds for k in range(5)]
             cols = feature_columns(exps[name])
             if cols:
-                pd.DataFrame([{"seed": s, "fold": k, "feature": c, "coef": float(rng.normal())}
-                              for s in seeds for k in range(5) for c in cols]).to_csv(d / "feature_coefs.csv", index=False)
+                m["feature_coefs"] = [{"seed": s, "fold": k, "feature": c, "coef": float(rng.normal())}
+                                      for s in seeds for k in range(5) for c in cols]
+            (d / "metrics.json").write_text(json.dumps(m))
         res = compute(exps, tmp, folds_path)
+        assert res["reproduction"] is not None and res["reproduction"]["ok"], res["reproduction"]
         out = tmp / "comparison"
         exp_df, comp_df = write_outputs(res, out)
         assert len(exp_df) == len(exps)
@@ -596,7 +556,9 @@ def selftest():
         assert total["verdict"] == "значимо лучше", total
         figs = sorted(p.name for p in (out / "figures").glob("*.png"))
         assert len(figs) == 7, figs
-        bad = dict(json.loads((tmp / "e1_ridgecv" / "metrics.json").read_text()))
+        tables = sorted(p.name for p in (out / "tables").iterdir())
+        assert tables == ["checks.json", "comparisons.csv", "error_examples_final.csv", "experiments.csv", "paired_bootstrap.csv"], tables
+        bad = json.loads((tmp / "e1_ridgecv" / "metrics.json").read_text())
         bad["run_info"]["folds_sha256"] = "0" * 64
         (tmp / "e1_ridgecv" / "metrics.json").write_text(json.dumps(bad))
         try:
@@ -607,7 +569,8 @@ def selftest():
         keep = ROOT / "reports" / "_compare_selftest"
         shutil.rmtree(keep, ignore_errors=True)
         shutil.copytree(out, keep)
-        print(f"compare selftest OK: {len(exp_df)} experiments, {len(comp_df)} comparisons, figures {figs}")
+        print(f"compare selftest OK: {len(exp_df)} experiments, {len(comp_df)} comparisons, "
+              f"{len(figs)} figures, tables {tables}")
         print(f"inspect fake-data output in {keep} (delete it afterwards)")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

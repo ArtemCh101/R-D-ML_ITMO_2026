@@ -82,7 +82,8 @@ def _ensure_experiment(mlflow, tracking):
 
 def _log(mlflow, cfg, metrics, fold_df, out_dir, info):
     _ensure_experiment(mlflow, cfg["tracking"])
-    role = "ablation" if "ablation" in cfg else "improvement" if "improvement" in cfg else "baseline"
+    roles = [r for r in ("improvement", "ablation") if r in cfg]
+    role = " / ".join(roles) if roles else "baseline"
     with mlflow.start_run(run_name=cfg["experiment"]):
         tags = {
             "experiment_id": cfg["experiment"],
@@ -105,8 +106,8 @@ def _log(mlflow, cfg, metrics, fold_df, out_dir, info):
         scalars["oof_rmse_across_seeds_mean"] = metrics["oof_rmse_across_seeds"]["mean"]
         mlflow.log_metrics(scalars)
         if fold_df is not None:
-            for step, row in enumerate(fold_df.itertuples(index=False)):
-                mlflow.log_metric("rmse_fold", row.rmse, step=step)
+            for step, value in enumerate(fold_df["rmse"]):
+                mlflow.log_metric("rmse_fold", float(value), step=step)
         mlflow.log_dict(cfg, "config.json")
         if out_dir is not None:
             mlflow.log_artifacts(str(out_dir), artifact_path="reports")

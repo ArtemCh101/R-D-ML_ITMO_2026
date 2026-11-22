@@ -93,6 +93,30 @@ def fit_full_and_predict(cfg, train):
     return pd.DataFrame({"id": test["id"], "target": model.predict(model_inputs(cfg, test))})
 
 
+def save_baseline_outputs(cfg, out, train, oof, fold_df, summary):
+    oof.to_csv(out / "oof.csv", index=False)
+    fold_df.to_csv(out / "fold_metrics.csv", index=False)
+    with open(out / "metrics.json", "w") as f:
+        json.dump(summary, f, indent=2)
+    fit_full_and_predict(cfg, train).to_csv(out / "submission.csv", index=False)
+
+
+def save_experiment_outputs(cfg, out, oof, fold_df, extras, summary, info):
+    for old in out.iterdir():
+        if old.is_file():
+            old.unlink()
+    oof.to_csv(out / "oof.csv", index=False)
+    summary["run_info"] = info
+    summary["folds"] = json.loads(fold_df.to_json(orient="records"))
+    for name, df in extras.items():
+        summary[name] = json.loads(df.to_json(orient="records"))
+    with open(out / "metrics.json", "w") as f:
+        json.dump(summary, f, indent=2)
+    from src.tracking import log_run
+    if log_run(cfg, summary, fold_df, out, info):
+        print(f"Logged to MLflow: {cfg['tracking']['experiment_name']} / {cfg['experiment']}")
+
+
 def main(config_path):
     cfg = load_config(config_path)
     out = experiment_dir(cfg)
@@ -101,21 +125,11 @@ def main(config_path):
     assert (folds["id"].values == train["id"].values).all()
     if is_experiment(cfg):
         from src.registry import load_experiments, validate
-        validate(load_experiments())
         from src.tracking import run_info
+        validate(load_experiments())
         info = run_info(cfg)
     oof, fold_df, extras = run_cv(cfg, train, folds)
-    oof.to_csv(out / "oof.csv", index=False)
-    fold_df.to_csv(out / "fold_metrics.csv", index=False)
-    for name, df in extras.items():
-        if not df.empty:
-            df.to_csv(out / f"{name}.csv", index=False)
     summary = summarize(cfg, oof, fold_df)
-    if is_experiment(cfg):
-        summary["run_info"] = info
-    with open(out / "metrics.json", "w") as f:
-        json.dump(summary, f, indent=2)
-    fit_full_and_predict(cfg, train).to_csv(out / "submission.csv", index=False)
     pf = summary["per_fold"]
     msg = (f"{cfg['experiment']}: RMSE {pf['rmse']['mean']:.4f} ± {pf['rmse']['std']:.4f} "
            f"(dummy {pf['dummy_rmse']['mean']:.4f} ± {pf['dummy_rmse']['std']:.4f}), {len(fold_df)} folds")
@@ -123,6 +137,10 @@ def main(config_path):
         a = summary["alpha"]
         msg += f", alpha median {a['median']:.3g} [{a['min']:.3g}, {a['max']:.3g}]"
     print(msg)
+    if is_experiment(cfg):
+        save_experiment_outputs(cfg, out, oof, fold_df, extras, summary, info)
+    else:
+        save_baseline_outputs(cfg, out, train, oof, fold_df, summary)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 base: ../baseline.yaml
 
+paths:
+  reports: reports/baseline_improvement_experiments/runs
+
 model_defaults:
   tfidf:
     ngram_range: [1, 2]
@@ -27,7 +30,8 @@ features:
 comparison:
   reference: e0_baseline
   final: e2_ridgecv_features
-  output: reports/comparison
+  output: reports/baseline_improvement_experiments
+  hw1_baseline_oof: reports/tfidf_ridge/oof.csv
   bootstrap:
     iters: 5000
     ci: 0.95
