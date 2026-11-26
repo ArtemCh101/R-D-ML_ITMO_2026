@@ -1,0 +1,33 @@
+{
+  "error_analysis": {
+    "selected_experiment": "e2_ridgecv_features",
+    "reference_experiment": "e0_baseline",
+    "analysis_seed": 42,
+    "folds_sha256": "f05f33b7d8bc69f00c2715df1f3f2567e6630c65b2c9324bd004979e893cab24",
+    "hw2_git_commit": "9c03d3c2f52c171030607e5b2ace5b4a8d2b43ad",
+    "n_texts": 2834,
+    "large_error_threshold": 1.0,
+    "large_share": 0.13761467889908258,
+    "large_all_seeds_share": 0.10303458009880029,
+    "rmse_selected_mean_over_seeds": 0.6755278089827441,
+    "n_near_duplicate_pairs": 2
+  },
+  "robustness": {
+    "train_fraction_1.0_reproduces_hw2_oof_max_abs_diff": {
+      "selected": 0.0,
+      "reference": 0.0
+    },
+    "typo_rate_0_reproduces_hw2_oof_max_abs_diff": {
+      "selected": 0.0,
+      "reference": 0.0
+    },
+    "reproduced": true,
+    "tolerance": 1e-08,
+    "typo_example": {
+      "id": "c12129c31",
+      "rate": 0.2,
+      "clean": "When the young people returned to the ballroom, it presented a decidedly changed appearance. Instead of an interior scene, it was a winter landscape. The floor was covered with snow-white canvas, not laid on smoothly, but rumpled over bumps and hillocks, like a real snow field. The numerous palms an",
+      "noisy": "When the yuong people returnde to the ballroom, it presented a decieddly changed appearance. Instead of an incterior scene, it was a winter landscape. Tqe floor was covered with snow-white canvas, not laid on smoothly, but rumpled oer bumps and hillocks, like a real snow field. The numnerous palms a"
+    }
+  }
+}

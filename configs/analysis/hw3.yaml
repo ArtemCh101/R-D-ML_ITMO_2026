@@ -1,0 +1,64 @@
+selected_experiment: e2_ridgecv_features
+reference_experiment: e0_baseline
+hw2_runs: reports/baseline_improvement_experiments/runs
+output: reports/error_analysis_robustness
+analysis_seed: 42
+
+bootstrap:
+  iters: 2000
+  ci: 0.95
+  seed: 2026
+
+errors:
+  large_error_threshold: 1.0
+  n_examples_per_type: 3
+  rare_word_max_df: 2
+  near_duplicate_min_similarity: 0.9
+  types:
+    extremes:
+      title: Крайние уровни сложности
+      group: target in Q1 or Q5
+      comparison: target in Q2-Q4
+      metric: rmse
+      expected: higher
+    rare_terms:
+      title: Редкие слова в сложных текстах
+      group: target <= median, rare_word_share in top tercile
+      comparison: target <= median, rare_word_share in bottom tercile
+      metric: bias
+      expected: higher
+    long_sentences:
+      title: Длинные предложения в легких текстах
+      group: target > median, words_per_sentence in top tercile
+      comparison: target > median, words_per_sentence in bottom tercile
+      metric: bias
+      expected: lower
+    feature_outliers:
+      title: Сбой сегментации предложений
+      group: words_per_sentence > 60 or flesch_reading_ease < 0
+      comparison: rest
+      metric: rmse
+      expected: higher
+      words_per_sentence_gt: 60
+      flesch_lt: 0
+    label_noise:
+      title: Вероятный шум разметки
+      group: large error on all seeds for both selected and reference model, same sign
+      comparison: rest
+      metric: standard_error
+      expected: higher
+
+slices:
+  target_bins: 5
+  length_bins: 3
+  se_bins_within_target: 2
+  min_domain_size: 30
+
+robustness:
+  train_fractions: [0.1, 0.2, 0.3, 0.5, 0.7, 1.0]
+  subsample_seed: 2026
+  typo_rates: [0.0, 0.05, 0.1, 0.2]
+  typo_seed: 2026
+  typo_min_word_length: 3
+  domain_min_size: 30
+  reproduction_tol: 1.0e-8
