@@ -262,7 +262,8 @@ def slices(ctx):
         for name, g in (("низкий SE", lo_d), ("высокий SE", hi_d)):
             s = group_stats(g, ctx["seeds"])
             rows.append({"target_quintile": f"Q{int(q)}", "se_group": name, "n": s["n"],
-                         "se_mean": float(g["standard_error"].mean()), "rmse": s["rmse"], "bias": s["bias"],
+                         "se_mean": float(g["standard_error"].mean()), "target_mean": s["target_mean"],
+                         "rmse": s["rmse"], "bias": s["bias"],
                          "rmse_diff_high_minus_low": rmse_of_res(hi_d["res"]) - rmse_of_res(lo_d["res"]),
                          "diff_ci_low": diff_lo, "diff_ci_high": diff_hi})
     tables["se_within_target"] = pd.DataFrame(rows)
@@ -383,6 +384,13 @@ def plot_se_within_target(t, path):
     plt.close()
 
 
+def update_checks(tdir, key, data):
+    path = tdir / "checks.json"
+    checks = json.loads(path.read_text()) if path.exists() else {}
+    checks[key] = data
+    path.write_text(json.dumps(checks, indent=2, ensure_ascii=False))
+
+
 def output_dirs(acfg):
     out = resolve(acfg["output"])
     tables, figures = out / "tables", out / "figures"
@@ -405,8 +413,8 @@ def main(config_path):
     dups = near_duplicates(ctx)
     dups.to_csv(tdir / "near_duplicates.csv", index=False)
     tables, target_labels = slices(ctx)
-    for name, t in tables.items():
-        t.to_csv(tdir / f"slices_{name}.csv", index=False)
+    pd.concat([tables[k] for k in ("target", "length", "url", "source")], ignore_index=True).to_csv(tdir / "slices.csv", index=False)
+    tables["se_within_target"].to_csv(tdir / "slices_se_within_target.csv", index=False)
 
     plot_error_types(types, fdir / "01_error_types.png")
     plot_mechanisms(ctx, masks, fdir / "02_error_mechanisms.png")
@@ -423,7 +431,7 @@ def main(config_path):
         "rmse_selected_mean_over_seeds": float(np.mean([rmse_of_res(df[f"res_sel_{s}"]) for s in ctx["seeds"]])),
         "n_near_duplicate_pairs": int(len(dups)),
     }
-    (tdir / "error_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False))
+    update_checks(tdir, "error_analysis", summary)
 
     pd.set_option("display.width", 200)
     print(f"Selected: {acfg['selected_experiment']}, RMSE {summary['rmse_selected_mean_over_seeds']:.4f}; "
@@ -436,7 +444,7 @@ def main(config_path):
         print(f"--- slice: {name}")
         print(tables[name][["group", "n", "target_mean", "rmse", "rmse_ci_low", "rmse_ci_high", "bias", "rmse_reference"]].round(3).to_string(index=False))
     print("--- SE within target quintile")
-    print(tables["se_within_target"][["target_quintile", "se_group", "n", "se_mean", "rmse", "diff_ci_low", "diff_ci_high"]].round(3).to_string(index=False))
+    print(tables["se_within_target"][["target_quintile", "se_group", "n", "se_mean", "target_mean", "rmse", "bias", "diff_ci_low", "diff_ci_high"]].round(3).to_string(index=False))
     print(f"Saved error analysis tables to {tdir} and figures to {fdir}")
 
 

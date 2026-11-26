@@ -1,5 +1,4 @@
 import argparse
-import json
 import re
 import zlib
 
@@ -10,7 +9,7 @@ import pandas as pd
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from src.error_analysis import ANALYSIS_CONFIG, FEATURES, load_context, output_dirs, rmse_of_res
+from src.error_analysis import ANALYSIS_CONFIG, FEATURES, load_context, output_dirs, rmse_of_res, update_checks
 from src.features import build_features
 from src.models import build_model, selected_alpha
 from src.registry import feature_columns
@@ -55,7 +54,7 @@ def oof_summary(oof_by_seed, y):
     vals = [compute_metrics(y, p) for p in oof_by_seed.values()]
     ratios = [float(np.std(p) / np.std(y)) for p in oof_by_seed.values()]
     return {"oof_rmse": float(np.mean([v["rmse"] for v in vals])), "oof_spearman": float(np.mean([v["spearman"] for v in vals])),
-            "std_ratio": float(np.mean(ratios))}
+            "bias": float(np.mean([np.mean(p - y) for p in oof_by_seed.values()])), "std_ratio": float(np.mean(ratios))}
 
 
 def train_size(ctx):
@@ -269,7 +268,6 @@ def main(config_path):
     ty_folds, ty_summary, ty_oofs, typo_example = typos(ctx)
     dom = domain_holdout(ctx)
 
-    pd.concat([ts_folds, ty_folds], ignore_index=True).to_csv(tdir / "robustness_folds.csv", index=False)
     ts_summary.to_csv(tdir / "robustness_train_size.csv", index=False)
     ty_summary.to_csv(tdir / "robustness_typos.csv", index=False)
     dom.to_csv(tdir / "robustness_domain_holdout.csv", index=False)
@@ -288,13 +286,13 @@ def main(config_path):
         "tolerance": tol,
         "typo_example": typo_example,
     }
-    (tdir / "robustness_checks.json").write_text(json.dumps(checks, indent=2, ensure_ascii=False))
+    update_checks(tdir, "robustness", checks)
 
     pd.set_option("display.width", 200)
     print("--- train size")
-    print(ts_summary[["model", "train_fraction", "n_train_mean", "rmse_mean", "rmse_std", "delta_vs_full", "spearman_mean", "std_ratio"]].round(4).to_string(index=False))
+    print(ts_summary[["model", "train_fraction", "n_train_mean", "rmse_mean", "rmse_std", "delta_vs_full", "spearman_mean", "bias", "std_ratio"]].round(4).to_string(index=False))
     print("--- typos")
-    print(ty_summary[["model", "typo_rate", "realized_word_typo_share", "rmse_mean", "rmse_std", "delta_vs_clean", "spearman_mean", "std_ratio"]].round(4).to_string(index=False))
+    print(ty_summary[["model", "typo_rate", "realized_word_typo_share", "rmse_mean", "rmse_std", "delta_vs_clean", "spearman_mean", "bias", "std_ratio"]].round(4).to_string(index=False))
     print("--- domain holdout")
     print(dom[["domain", "model", "n_test", "target_mean", "rmse_cv", "rmse_domain_holdout", "delta", "delta_ci_low", "delta_ci_high"]].round(4).to_string(index=False))
     print(f"HW2 reproduction (fraction 1.0 / typo rate 0): {rep_ts} / {rep_ty} -> {'reproduced' if checks['reproduced'] else 'NOT REPRODUCED'}")
