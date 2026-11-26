@@ -12,9 +12,30 @@ def resolve(path):
     return ROOT / path
 
 
+REPLACE_KEYS = {"model"}
+
+
+def deep_merge(base, override):
+    out = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
 def load_config(path="configs/baseline.yaml"):
-    with open(resolve(path)) as f:
-        return yaml.safe_load(f)
+    path = resolve(path)
+    with open(path) as f:
+        cfg = yaml.safe_load(f) or {}
+    base = cfg.pop("base", None)
+    if base is None:
+        return cfg
+    parent = load_config(path.parent / base)
+    for key in REPLACE_KEYS & cfg.keys():
+        parent.pop(key, None)
+    return deep_merge(parent, cfg)
 
 
 def set_seed(seed):

@@ -1,0 +1,55 @@
+          id  fold_42  fold_1337  fold_2026
+0  c12129c31        0          4          4
+1  85aa80a4c        4          2          4
+2  b69ac6792        2          0          0
+3  dd1000b26        4          3          0
+4  37c1b32fb        4          1          0
+feature cache: 2841 texts, 12 features
+=== configs/experiments/e0_baseline.yaml
+2026/11/22 14:37:14 INFO mlflow.store.db.utils: Creating initial MLflow database tables...
+2026/11/22 14:37:14 INFO mlflow.store.db.utils: Updating database tables
+e0_baseline: RMSE 0.7248 ± 0.0148 (dummy 1.0333 ± 0.0145), 15 folds
+Logged to MLflow: commonlit-readability / e0_baseline
+=== configs/experiments/e1_ridgecv.yaml
+e1_ridgecv: RMSE 0.7127 ± 0.0164 (dummy 1.0333 ± 0.0145), 15 folds, alpha median 0.1 [0.0215, 0.147]
+Logged to MLflow: commonlit-readability / e1_ridgecv
+=== configs/experiments/e2_ridgecv_features.yaml
+e2_ridgecv_features: RMSE 0.6754 ± 0.0145 (dummy 1.0333 ± 0.0145), 15 folds, alpha median 0.147 [0.0681, 0.215]
+Logged to MLflow: commonlit-readability / e2_ridgecv_features
+=== configs/experiments/a1_no_tuning.yaml
+a1_no_tuning: RMSE 0.6823 ± 0.0134 (dummy 1.0333 ± 0.0145), 15 folds
+Logged to MLflow: commonlit-readability / a1_no_tuning
+=== configs/experiments/a2_no_tfidf.yaml
+a2_no_tfidf: RMSE 0.8074 ± 0.0148 (dummy 1.0333 ± 0.0145), 15 folds, alpha median 0.0681 [0.0316, 0.147]
+Logged to MLflow: commonlit-readability / a2_no_tfidf
+=== configs/experiments/a3_no_sentence.yaml
+a3_no_sentence: RMSE 0.6751 ± 0.0142 (dummy 1.0333 ± 0.0145), 15 folds, alpha median 0.147 [0.0681, 0.215]
+Logged to MLflow: commonlit-readability / a3_no_sentence
+=== configs/experiments/a4_no_word.yaml
+a4_no_word: RMSE 0.6766 ± 0.0141 (dummy 1.0333 ± 0.0145), 15 folds, alpha median 0.147 [0.0681, 0.215]
+Logged to MLflow: commonlit-readability / a4_no_word
+=== configs/experiments/a5_no_length.yaml
+a5_no_length: RMSE 0.6859 ± 0.0140 (dummy 1.0333 ± 0.0145), 15 folds, alpha median 0.1 [0.0464, 0.215]
+Logged to MLflow: commonlit-readability / a5_no_length
+=== configs/experiments/a6_no_formulas.yaml
+a6_no_formulas: RMSE 0.6762 ± 0.0146 (dummy 1.0333 ± 0.0145), 15 folds, alpha median 0.147 [0.0681, 0.215]
+Logged to MLflow: commonlit-readability / a6_no_formulas
+=== configs/experiments/a7_no_familiarity.yaml
+a7_no_familiarity: RMSE 0.6822 ± 0.0144 (dummy 1.0333 ± 0.0145), 15 folds, alpha median 0.147 [0.0681, 0.215]
+Logged to MLflow: commonlit-readability / a7_no_familiarity
+       kind               model                 ref  delta_mean folds_better       verdict
+improvement          e1_ridgecv         e0_baseline   -0.012012        15/15 значимо лучше
+improvement e2_ridgecv_features          e1_ridgecv   -0.037369        15/15 значимо лучше
+      total e2_ridgecv_features         e0_baseline   -0.049381        15/15 значимо лучше
+   ablation          e1_ridgecv e2_ridgecv_features    0.037369         0/15  значимо хуже
+   ablation        a1_no_tuning e2_ridgecv_features    0.006918         1/15  значимо хуже
+   ablation         a2_no_tfidf e2_ridgecv_features    0.131983         0/15  значимо хуже
+   ablation      a3_no_sentence e2_ridgecv_features   -0.000267         5/15     незначимо
+   ablation          a4_no_word e2_ridgecv_features    0.001184         7/15     незначимо
+   ablation        a5_no_length e2_ridgecv_features    0.010488         1/15  значимо хуже
+   ablation      a6_no_formulas e2_ridgecv_features    0.000801         4/15     незначимо
+   ablation   a7_no_familiarity e2_ridgecv_features    0.006831         0/15  значимо хуже
+E0 vs HW1 baseline: max |delta RMSE| = 5.8e-07, max |delta pred| = 1.5e-04, reproduced
+folds hash consistent across experiments
+alpha grid boundary rule: not triggered
+Saved tables to /mnt/c/users/artem/Jupyter notebooks/R&DML/reports/baseline_improvement_experiments/tables and figures to /mnt/c/users/artem/Jupyter notebooks/R&DML/reports/baseline_improvement_experiments/figures

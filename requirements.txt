@@ -7,3 +7,4 @@ pyyaml>=6.0
 textstat>=0.7.3
 jupyterlab>=4.0
 ipykernel>=6.0
+mlflow==3.18.0

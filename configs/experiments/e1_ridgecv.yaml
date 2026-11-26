@@ -1,0 +1,25 @@
+base: common.yaml
+experiment: e1_ridgecv
+title: Вложенный подбор alpha (RidgeCV)
+hypothesis: >
+  Мы считаем, что alpha = 1.0 пере-регуляризует baseline. Для откалиброванных предсказаний
+  std(pred)/std(target) близко к корреляции Пирсона (0.73), у baseline – 0.59, то есть
+  наклон калибровки около 1.23; ошибка на крайних квинтилях таргета около 0.95 против 0.43
+  в центре. Поэтому подбираем alpha по внутренней LOO-ошибке только на train-части
+  каждого внешнего фолда.
+expected: >
+  Выбранная alpha < 1 и стабильна по фолдам; отношение std растет, наклон калибровки
+  приближается к 1; RMSE и |bias| на Q1/Q5 снижаются; общий RMSE снижается значимо.
+improvement:
+  parent: e0_baseline
+  adds: [tuning]
+ablation:
+  of: e2_ridgecv_features
+  removes: [features:all]
+  expected: >
+    Без признаков итоговая модель ухудшается (обратная сторона улучшения 2).
+model:
+  name: linear_text
+  use_tfidf: true
+  feature_groups: []
+  tuning: nested_loo
